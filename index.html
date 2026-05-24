@@ -291,7 +291,7 @@
 
             // 关灯模式下鼠标无动作计时器
             let darkMouseTimer = null;
-            const HIDE_DELAY = 3000; // 3秒
+            const HIDE_DELAY = 3000;
 
             // 日期格式化
             function formatDate(date) {
@@ -332,7 +332,6 @@
                 const todayStr = getTodayStr();
                 let anyFieldUpdated = false;
 
-                // 按月标签
                 if (document.activeElement !== monthProduceDate) {
                     if (monthProduceDate.value === lastAutoSetDate || monthProduceDate.value === '') {
                         if (monthProduceDate.value !== todayStr) {
@@ -343,7 +342,6 @@
                     }
                 }
 
-                // 按天标签
                 if (document.activeElement !== dayProduceDate) {
                     if (dayProduceDate.value === lastAutoSetDate || dayProduceDate.value === '') {
                         if (dayProduceDate.value !== todayStr) {
@@ -358,11 +356,9 @@
                     lastAutoSetDate = todayStr;
                 }
 
-                // 更新关灯界面
                 updateDarkDisplay();
             }
 
-            // 更新关灯界面的内容
             function updateDarkDisplay() {
                 if (!darkMode.classList.contains('active')) return;
 
@@ -382,24 +378,46 @@
                 darkExpire.textContent = expire;
             }
 
-            // 计算函数
+            // ================= 按月计算（修正版） =================
             function calculateMonth() {
-                const produceDate = monthProduceDate.value;
+                const produceDateStr = monthProduceDate.value;
                 const monthVal = parseInt(monthValue.value);
-                if (!produceDate || isNaN(monthVal) || monthVal < 1) {
+                if (!produceDateStr || isNaN(monthVal) || monthVal < 1) {
                     monthResult.value = '#VALUE！';
                     return;
                 }
-                const date = new Date(produceDate + 'T00:00:00');
-                if (isNaN(date.getTime())) {
+                const produceDate = new Date(produceDateStr + 'T00:00:00');
+                if (isNaN(produceDate.getTime())) {
                     monthResult.value = '#VALUE！';
                     return;
                 }
-                date.setMonth(date.getMonth() + monthVal);
-                date.setDate(date.getDate() - 1);
-                monthResult.value = formatDate(date);
+
+                let year = produceDate.getFullYear();
+                let month = produceDate.getMonth();     // 0-11
+                let day = produceDate.getDate();
+
+                // 1. 加月份，计算目标年份和月份
+                let totalMonths = month + monthVal;
+                let targetYear = year + Math.floor(totalMonths / 12);
+                let targetMonth = totalMonths % 12;
+
+                // 2. 获取目标月份的实际天数（考虑平年/闰年）
+                let lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+
+                let expireDate;
+                if (day <= lastDayOfTargetMonth) {
+                    // 对应日存在：使用该日，然后减 1 天
+                    expireDate = new Date(targetYear, targetMonth, day);
+                    expireDate.setDate(expireDate.getDate() - 1);
+                } else {
+                    // 对应日不存在：直接使用目标月份的最后一天，不再减 1 天
+                    expireDate = new Date(targetYear, targetMonth, lastDayOfTargetMonth);
+                }
+
+                monthResult.value = formatDate(expireDate);
             }
 
+            // 按天计算（无需修改）
             function calculateDay() {
                 const produceDate = dayProduceDate.value;
                 const dayVal = parseInt(dayValue.value);
@@ -412,8 +430,8 @@
                     dayResult.value = '#VALUE！';
                     return;
                 }
-                date.setDate(date.getDate() + dayVal);
-                date.setDate(date.getDate() - 1);
+                // 等效于加上 (dayVal-1) 天
+                date.setDate(date.getDate() + dayVal - 1);
                 dayResult.value = formatDate(date);
             }
 
@@ -441,25 +459,21 @@
                 clearDarkMouseTimer();
             }
 
-            // 鼠标移动监听（关灯模式下隐藏按钮）
-            darkMode.addEventListener('mousemove', function(e) {
+            darkMode.addEventListener('mousemove', function() {
                 if (!darkMode.classList.contains('active')) return;
                 resetDarkMouseTimer();
             });
-
-            darkMode.addEventListener('touchmove', function(e) {
+            darkMode.addEventListener('touchmove', function() {
                 if (!darkMode.classList.contains('active')) return;
                 resetDarkMouseTimer();
             }, { passive: true });
 
-            // 页面可见性变化时立即同步（解决后台定时器节流）
             document.addEventListener('visibilitychange', function() {
                 if (!document.hidden) {
                     syncSystemDate();
                 }
             });
 
-            // 窗口获得焦点时立即同步（覆盖更多场景）
             window.addEventListener('focus', function() {
                 syncSystemDate();
             });
@@ -474,7 +488,6 @@
                 calculateMonth();
                 calculateDay();
 
-                // 每500毫秒检查一次日期变化（更快响应系统时间修改）
                 setInterval(syncSystemDate, 500);
 
                 monthValue.addEventListener('input', calculateMonth);
