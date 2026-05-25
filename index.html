@@ -293,6 +293,35 @@
             let darkMouseTimer = null;
             const HIDE_DELAY = 3000;
 
+            // 全屏辅助函数
+            function requestFullscreen(element) {
+                if (element.requestFullscreen) {
+                    return element.requestFullscreen();
+                } else if (element.webkitRequestFullscreen) { /* Safari */
+                    return element.webkitRequestFullscreen();
+                } else if (element.msRequestFullscreen) { /* IE/Edge */
+                    return element.msRequestFullscreen();
+                }
+                return Promise.reject('全屏API不受支持');
+            }
+
+            function exitFullscreen() {
+                if (document.exitFullscreen) {
+                    return document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    return document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    return document.msExitFullscreen();
+                }
+                return Promise.reject('全屏API不受支持');
+            }
+
+            function isFullscreen() {
+                return !!(document.fullscreenElement ||
+                         document.webkitFullscreenElement ||
+                         document.msFullscreenElement);
+            }
+
             // 日期格式化
             function formatDate(date) {
                 const year = date.getFullYear();
@@ -325,6 +354,12 @@
                     darkMouseTimer = null;
                 }
                 closeDarkBtn.classList.remove('hidden');
+            }
+
+            // 关闭关灯模式UI（不触发退出全屏，用于全屏变化监听）
+            function closeDarkModeUI() {
+                darkMode.classList.remove('active');
+                clearDarkMouseTimer();
             }
 
             // 自动同步系统日期
@@ -445,20 +480,46 @@
                 });
             });
 
-            // 关灯
+            // 关灯 - 显示并请求全屏
             function showDarkMode() {
                 const activeTab = document.querySelector('.tab-content.active');
                 currentDarkTab = activeTab.id;
                 updateDarkDisplay();
                 darkMode.classList.add('active');
                 resetDarkMouseTimer();
+
+                // 尝试进入全屏
+                requestFullscreen(darkMode).catch(err => {
+                    // 如果全屏失败（如浏览器不支持），关灯界面依然显示，只是非全屏
+                    console.warn('无法进入全屏模式:', err);
+                });
             }
 
+            // 开灯 - 退出全屏并隐藏
             function hideDarkMode() {
-                darkMode.classList.remove('active');
-                clearDarkMouseTimer();
+                // 如果当前处于全屏状态，先退出全屏
+                if (isFullscreen()) {
+                    exitFullscreen().catch(err => {
+                        console.warn('退出全屏失败:', err);
+                    });
+                }
+                // 隐藏关灯界面
+                closeDarkModeUI();
             }
 
+            // 监听全屏变化（用户按ESC或系统退出全屏时同步状态）
+            function onFullscreenChange() {
+                if (!isFullscreen() && darkMode.classList.contains('active')) {
+                    // 全屏已退出，自动关闭关灯模式
+                    closeDarkModeUI();
+                }
+            }
+
+            document.addEventListener('fullscreenchange', onFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+            document.addEventListener('msfullscreenchange', onFullscreenChange);
+
+            // 关灯界面鼠标移动显示按钮
             darkMode.addEventListener('mousemove', function() {
                 if (!darkMode.classList.contains('active')) return;
                 resetDarkMouseTimer();
